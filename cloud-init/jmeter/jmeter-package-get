@@ -1,0 +1,94 @@
+#!/bin/bash
+JMETER_HOME="/opt/jmeter"
+LOAD_TESTS_HOME="/home/opc/performance"
+
+OBJECT_STORAGE_REPOSITORY_PAR_URL="${object-storage-repository-par-url}"
+
+PACKAGES_DIRECTORY="$${LOAD_TESTS_HOME}/packages"
+
+while getopts "fn:u:h" opt; do
+  case $opt in
+    f) # Force files overwriting when installing the package
+      OVERWRITE_FILES="true"
+      ;;
+    n) # The name of the test package to fetch
+      ARGS_TEST_PACKAGE_NAME=$OPTARG
+      ;;
+    u) # The package repository URL from which to download the test package
+      OBJECT_STORAGE_REPOSITORY_PAR_URL=$OPTARG
+      ;;
+    h|*)
+      echo "Options:" && grep " .)\ #" $0; exit 0
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+if [ -z "$${ARGS_TEST_PACKAGE_NAME}" ]; then
+  echo "The name of the test package to fetch is required"
+  exit 1
+fi
+
+if [ -z "$${OBJECT_STORAGE_REPOSITORY_PAR_URL}" ]; then
+  echo "The package repository URL is required"
+  exit 2
+fi
+
+TEST_PACKAGE_URL="$${OBJECT_STORAGE_REPOSITORY_PAR_URL}/packages/$${ARGS_TEST_PACKAGE_NAME}.tar.gz"
+TEST_PACKAGE_ARCHIVE="$${PACKAGES_DIRECTORY}/$${ARGS_TEST_PACKAGE_NAME}.tar.gz"
+
+wget --quiet $${TEST_PACKAGE_URL} -O$${TEST_PACKAGE_ARCHIVE}
+
+if [ "$${OVERWRITE_FILES}" != "true" ]; then
+
+  EXISTING_FILES=()
+  for FILE in $(tar -tzf $${TEST_PACKAGE_ARCHIVE}); do
+
+    FILE_ABSOLUTE_PATH="$(readlink -f $${LOAD_TESTS_HOME}/$${FILE})"
+
+    if [ -f "$${FILE_ABSOLUTE_PATH}" ]; then
+      EXISTING_FILES+=("$${FILE_ABSOLUTE_PATH}")
+    fi
+  done
+
+  EXISTING_FILES_COUNT=$${#EXISTING_FILES[@]}
+
+  if [ $${EXISTING_FILES_COUNT} -gt 0 ]; then
+
+    echo
+    echo "The following files already exist:"
+    echo
+
+    for (( i = 0; i < $${EXISTING_FILES_COUNT}; i++ )); do
+      echo "$${EXISTING_FILES[$i]}"
+    done
+
+    echo
+    echo "Please use -f option to force files overwriting, otherwise the package will not be installed"
+    echo
+    exit 3
+  fi
+fi
+
+tar -xzf $${TEST_PACKAGE_ARCHIVE} -C $${LOAD_TESTS_HOME}
+REMOTE_HOSTS=$(awk -F'=' '/^remote_hosts/ && $2 != "" {print $2}' "$${JMETER_HOME}/bin/user.properties" | tr ',' ' ')
+
+if [ -n "$${REMOTE_HOSTS}" ]; then
+
+  echo
+  echo "Copying package archive to configured JMeter remotes"
+
+  for REMOTE_HOST in $${REMOTE_HOSTS}; do
+
+    echo "Copying package archive to $${REMOTE_HOST}"
+
+    ssh -q -o BatchMode=yes -o StrictHostKeyChecking=accept-new "opc@$${REMOTE_HOST}" "mkdir -p $${PACKAGES_DIRECTORY}"
+    scp -q -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$${TEST_PACKAGE_ARCHIVE}" "opc@$${REMOTE_HOST}:$${TEST_PACKAGE_ARCHIVE}"
+    ssh -q -o BatchMode=yes -o StrictHostKeyChecking=accept-new "opc@$${REMOTE_HOST}" "tar -xzf $${TEST_PACKAGE_ARCHIVE} -C $${LOAD_TESTS_HOME}"
+
+    if [ $? -ne 0 ]; then
+      echo "Cannot install package on $${REMOTE_HOST}"
+      exit 4
+    fi
+  done
+fi

@@ -1,0 +1,63 @@
+#cloud-config
+packages:
+  - java-21-openjdk
+users:
+  - default
+  - name: jmeter
+    homedir: /var/lib/jmeter
+    shell: /sbin/nologin
+    lock_passwd: true
+write_files:
+- path: /run/bootstrap/user.properties
+  encoding: b64
+  content: ${jmeter-properties}
+  owner: root:root
+  permissions: "0644"
+- path: /run/bootstrap/jmeter-worker.service
+  owner: root:root
+  permissions: "0755"
+  content: |
+    [Unit]
+    Description=JMeter Worker
+
+    [Service]
+    User=jmeter
+    WorkingDirectory=/opt/jmeter
+    ExecStart=/opt/jmeter/bin/jmeter-server
+    Environment="HEAP=-Xms${jmeter-jvm-heap-size}m -Xmx${jmeter-jvm-heap-size}m -XX:MaxMetaspaceSize=${jmeter-jvm-permgen-size}m"
+    LimitNOFILE=65535
+    SuccessExitStatus=143
+    Restart=on-failure
+    RestartSec=15
+    TimeoutStopSec=15
+
+    [Install]
+    WantedBy=multi-user.target
+- path: /run/bootstrap/jmeter-setup.sh
+  owner: root:root
+  permissions: "0755" 
+  content: |
+
+    firewall-offline-cmd --zone=public --add-port=${jmeter-port}/tcp
+
+    wget ${jmeter-binaries-url}/apache-jmeter-${jmeter-version}.tgz
+
+    # Extracting JMeter from downloaded package, excluding documentation directories
+    tar xzf apache-jmeter-${jmeter-version}.tgz -C /run/bootstrap --exclude=docs --exclude=printable_docs
+
+    mv /run/bootstrap/apache-jmeter-${jmeter-version} /opt/jmeter
+
+    cp /run/bootstrap/user.properties /opt/jmeter/bin/user.properties
+
+    chown -R jmeter:jmeter /opt/jmeter
+
+    # Enable jmeter to traverse the opc's home
+    setfacl -m u:jmeter:x /home/opc
+
+    cp /run/bootstrap/jmeter-worker.service /usr/lib/systemd/system/jmeter-worker.service
+
+    systemctl restart firewalld
+runcmd:
+  - [/run/bootstrap/jmeter-setup.sh]
+  - [systemctl, start, jmeter-worker]
+  - [systemctl, enable, jmeter-worker]

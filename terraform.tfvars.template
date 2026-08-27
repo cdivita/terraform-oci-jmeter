@@ -1,0 +1,34 @@
+tenancy_ocid = <tenancy_ocid>
+region       = <region>
+
+# Provider authentication through an OCI CLI config profile
+#oci_config_file_profile = "DEFAULT"
+
+# Or provider authentication through explicit API key variables
+#current_user_ocid        = <current_user_ocid>
+#oci_api_key_fingerprint  = <oci_api_key_fingerprint>
+#oci_api_private_key_path = <oci_api_private_key_path>
+
+# The OCID of the compartment where to create OCI resources
+#network_compartment_id = ""
+
+nodes_compartment_id = ""
+
+# Create a bastion for accessing JMeter nodes
+#create_bastion = true
+#bastion_compartment_id = null
+
+# Download/upload JMeter binaries to Object Storage and create bucket, object, and PAR
+#upload_jmeter_resources_to_object_storage = true
+#jmeter_resources_bucket_name = "jmeter-binaries"
+
+# Optional: use an already downloaded local archive instead of downloading it
+#jmeter_resources_local_path = "./apache-jmeter-5.6.3.tgz"
+
+# Optional: choose where Terraform downloads the archive when no local path is set
+#jmeter_resources_download_directory = "./.downloads"
+
+# Optional: configure the generated PAR
+#jmeter_resources_par_time_expires = "2099-12-31T23:59:59Z"
+
+#jmeter_resources_par_url = ""

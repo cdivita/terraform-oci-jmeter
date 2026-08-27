@@ -1,0 +1,34 @@
+#!/bin/bash
+OBJECT_STORAGE_REPOSITORY_PAR_URL="${object-storage-repository-par-url}"
+
+while getopts "n:u:h" opt; do
+  case $opt in
+    n) # The name of the test package to fetch
+      ARGS_TEST_PACKAGE_NAME=$OPTARG
+      ;;
+    u) # The package repository URL from which to download the test package
+      OBJECT_STORAGE_REPOSITORY_PAR_URL=$OPTARG
+      ;;
+    h|*) # Show available options
+      echo "Options:" && grep " .)\ #" $0; exit 0
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+if [ -z "$${OBJECT_STORAGE_REPOSITORY_PAR_URL}" ]; then
+  echo "The package repository URL is required"
+  exit 2
+fi
+
+LIST_PACKAGE_URL="$${OBJECT_STORAGE_REPOSITORY_PAR_URL}?prefix=packages"
+
+if [ -x "$(command -v jq)" ]; then
+  PACKAGES=$(wget --quiet $${LIST_PACKAGE_URL} -O- | jq -r '.objects[] | .name')
+else
+  PACKAGES=$(wget --quiet $${LIST_PACKAGE_URL} -O- | grep -Po '"name":.*?[^\\]"' | awk 'BEGIN { FS=":" } { gsub(/"/, "", $2); print $2 }')
+fi
+
+for PACKAGE in $${PACKAGES}; do
+  basename $${PACKAGE} .tar.gz
+done

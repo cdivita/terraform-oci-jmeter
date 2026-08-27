@@ -1,0 +1,83 @@
+#cloud-config
+packages:
+  - java-21-openjdk
+users:
+  - default
+  - name: jmeter
+    homedir: /var/lib/jmeter
+    shell: /sbin/nologin
+    lock_passwd: true
+write_files:
+- path: /run/bootstrap/id_rsa
+  encoding: b64
+  content: ${ssh-identity}
+  owner: root:root
+  permissions: "0600"
+- path: /run/bootstrap/user.properties
+  encoding: b64
+  content: ${jmeter-properties}
+  owner: root:root
+  permissions: "0644"
+- path: /run/bootstrap/jmeter-test
+  encoding: b64
+  content: ${jmeter-test-script}
+  owner: root:root
+  permissions: "0755"
+- path: /run/bootstrap/jmeter-package-get
+  encoding: b64
+  content: ${jmeter-package-get-script}
+  owner: root:root
+  permissions: "0755"
+- path: /run/bootstrap/jmeter-package-list
+  encoding: b64
+  content: ${jmeter-package-list-script}
+  owner: root:root
+  permissions: "0755"
+- path: /run/bootstrap/sample.jmx
+  encoding: b64
+  content: ${jmeter-sample-plan}
+  owner: root:root
+  permissions: "0644"
+- path: /run/bootstrap/jmeter-setup.sh
+  owner: root:root
+  permissions: "0755" 
+  content: |
+
+    cp /run/bootstrap/id_rsa /home/opc/.ssh/id_rsa
+
+    firewall-offline-cmd --zone=public --add-port=${client-port}/tcp
+    firewall-offline-cmd --zone=public --add-port=$(expr ${client-port} + 1)/tcp
+    firewall-offline-cmd --zone=public --add-port=$(expr ${client-port} + 2)/tcp
+
+    wget ${jmeter-binaries-url}/apache-jmeter-${jmeter-version}.tgz
+
+    # Extracting JMeter from downloaded package, excluding documentation directories
+    tar xzf apache-jmeter-${jmeter-version}.tgz -C /run/bootstrap --exclude=docs --exclude=printable_docs
+
+    mv /run/bootstrap/apache-jmeter-${jmeter-version} /opt/jmeter
+
+    cp /run/bootstrap/user.properties /opt/jmeter/bin/user.properties
+
+    chown -R jmeter:jmeter /opt/jmeter
+
+    mkdir -p /home/opc/performance/bundles
+    mkdir -p /home/opc/performance/config
+    mkdir -p /home/opc/performance/packages
+    mkdir -p /home/opc/performance/plans
+    mkdir -p /home/opc/performance/tools
+
+    cp /run/bootstrap/sample.jmx /home/opc/performance/plans/sample.jmx
+    cp /run/bootstrap/jmeter-test /home/opc/performance/tools/jmeter-test
+    cp /run/bootstrap/jmeter-package-get /home/opc/performance/tools/jmeter-package-get
+    cp /run/bootstrap/jmeter-package-list /home/opc/performance/tools/jmeter-package-list
+
+    mkdir -p /home/opc/.local/bin
+    ln -sf /home/opc/performance/tools/jmeter-test /home/opc/.local/bin/jmeter-test
+    ln -sf /home/opc/performance/tools/jmeter-package-get /home/opc/.local/bin/jmeter-package-get
+    ln -sf /home/opc/performance/tools/jmeter-package-list /home/opc/.local/bin/jmeter-package-list
+
+    chown -R opc:opc /home/opc
+
+    systemctl restart firewalld
+runcmd:
+  - [/run/bootstrap/jmeter-setup.sh]

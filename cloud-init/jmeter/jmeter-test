@@ -1,0 +1,144 @@
+#!/bin/bash
+JMETER_HOME="/opt/jmeter"
+LOAD_TESTS_HOME="/home/opc/performance"
+
+OBJECT_STORAGE_REPOSITORY_PAR_URL="${object-storage-repository-par-url}"
+
+ARGS_ENV="default"
+ARGS_TEST_PLAN="sample"
+ARGS_THREADS_NUM=1
+ARGS_THREADS_RAMP_UP=10
+ARGS_RUNNING_TIME=10
+ARGS_RUN_CONSTANT_DELAY=0
+ARGS_RUN_RANDOM_DELAY=0
+ARGS_REMOTE_MODE="true"
+ARGS_SAVE_SUBRESULTS="false"
+
+while getopts "e:p:u:i:t:c:d:slh" opt; do
+  case $opt in
+    e) # The environment specific properties file to load
+      ARGS_ENV=$OPTARG
+      ;;
+    p) # The test plan to run
+      ARGS_TEST_PLAN=$OPTARG
+      ;;
+    u) # The number of concurrent users
+      ARGS_THREADS_NUM=$OPTARG
+      ;;
+    i)
+      ARGS_THREADS_RAMP_UP=$OPTARG
+      ;;
+    t) # The test running time, in seconds
+      ARGS_RUNNING_TIME=$OPTARG
+      ;;
+    c) # The constant delay, in milliseconds, to wait before each iteration
+      ARGS_CONSTANT_DELAY=$OPTARG
+      ;;
+    d) # The random delay, in milliseconds, to wait before each iteration
+      ARGS_RANDOM_DELAY=$OPTARG
+      ;;
+    s) # Includes sub-samples in results
+      ARGS_SAVE_SUBRESULTS="true"
+      ;;
+    l) # Disable remote/distributed JMeter mode
+      ARGS_REMOTE_MODE="false"
+      ;;
+    h|*)
+      echo "Options:" && grep " .)\ #" $0; exit 0
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+NOW=$(date +"%Y%m%d_%H%M%S")
+SESSION_ID="$${ARGS_TEST_PLAN}_$${NOW}_$${ARGS_ENV}_u$${ARGS_THREADS_NUM}_t$${ARGS_RUNNING_TIME}"
+SESSION_HOME="$${LOAD_TESTS_HOME}/sessions/$${SESSION_ID}"
+
+SESSION_PLAN="$${LOAD_TESTS_HOME}/plans/$${ARGS_TEST_PLAN}.jmx"
+SESSION_LOG="$${SESSION_HOME}/$${SESSION_ID}.log"
+SESSION_RESULTS="$${SESSION_HOME}/$${SESSION_ID}.jtl"
+SESSION_DASHBOARDS="$${SESSION_HOME}/dashboards"
+SESSION_BUNDLE="$${LOAD_TESTS_HOME}/bundles/$${SESSION_ID}.tar.gz"
+
+mkdir -p $${SESSION_HOME}
+
+CMD_LINE="$${JMETER_HOME}/bin/jmeter -n -j $${SESSION_LOG} -t $${SESSION_PLAN}"
+
+ENV_PROPERTIES="$${LOAD_TESTS_HOME}/config/env.$${ARGS_ENV}.properties"
+if [ -f "$${ENV_PROPERTIES}" ]; then
+  CMD_LINE="$${CMD_LINE} -q $${ENV_PROPERTIES} -G$${ENV_PROPERTIES}"
+fi
+
+REMOTE_HOSTS_COUNT=$(awk -F'=' '/^remote_hosts/ && $2 != "" {print $2}' "$${JMETER_HOME}/bin/user.properties" | tr ',' '\n' | grep -c .)
+
+if [ "$${ARGS_REMOTE_MODE}" = "true" ] && [ "$${REMOTE_HOSTS_COUNT}" -gt 0 ]; then
+  CMD_LINE="$${CMD_LINE} -r"
+
+  ARGS_THREADS_NUM=$(( $${ARGS_THREADS_NUM} / $${REMOTE_HOSTS_COUNT} ))
+
+  if [ $${ARGS_THREADS_NUM} -eq 0 ]; then
+    ARGS_THREADS_NUM=1
+  fi
+fi
+
+#CMD_LINE="$${CMD_LINE} -Jserver.rmi.ssl.keystore.file=$${JMETER_HOME}/bin/rmi_keystore.jks -Gserver.rmi.ssl.keystore.file=$${JMETER_HOME}/bin/rmi_keystore.jks"
+
+CMD_LINE="$${CMD_LINE} -Jsession.id=$${SESSION_ID} -Gsession.id=$${SESSION_ID}"
+
+CMD_LINE="$${CMD_LINE} -JthreadsNum=$${ARGS_THREADS_NUM} -GthreadsNum=$${ARGS_THREADS_NUM}"
+CMD_LINE="$${CMD_LINE} -JthreadsRampUp=$${ARGS_THREADS_RAMP_UP} -GthreadsRampUp=$${ARGS_THREADS_RAMP_UP}"
+CMD_LINE="$${CMD_LINE} -JrunningTime=$${ARGS_RUNNING_TIME} -GrunningTime=$${ARGS_RUNNING_TIME}"
+CMD_LINE="$${CMD_LINE} -JrunConstantDelay=$${ARGS_RUN_CONSTANT_DELAY} -GrunConstantDelay=$${ARGS_RUN_CONSTANT_DELAY}"
+CMD_LINE="$${CMD_LINE} -JrunRandomDelay=$${ARGS_RUN_RANDOM_DELAY} -GrunRandomDelay=$${ARGS_RUN_RANDOM_DELAY}"
+
+if [ "$${ARGS_SAVE_SUBRESULTS}" != "true" ]; then
+  CMD_LINE="$${CMD_LINE} -Jjmeter.save.saveservice.subresults=false -Djmeter.save.saveservice.subresults=false"
+fi
+
+CMD_LINE="$${CMD_LINE} -l $${SESSION_RESULTS}"
+
+export HEAP="-Xms${jmeter-jvm-heap-size}m -Xmx${jmeter-jvm-heap-size}m -XX:MaxMetaspaceSize=${jmeter-jvm-permgen-size}m"
+
+echo "Take a look to jmeter log: tail -f $${SESSION_LOG}"
+echo
+
+# Run the performance tests, executing the configured test plan
+$${CMD_LINE}
+
+# If jtl file is available, dashboards can be generated
+if [ -f "$${SESSION_RESULTS}" ]; then
+
+  # Generating session dashboards
+  $${JMETER_HOME}/bin/jmeter -j /dev/null -g $${SESSION_RESULTS} -o $${SESSION_DASHBOARDS}
+
+  # Create bundles target directory, if required
+  if [ ! -d "$${LOAD_TESTS_HOME}/bundles" ]; then
+    mkdir -p $${LOAD_TESTS_HOME}/bundles
+  fi
+
+  # Bundle all the stuff together, for an easier export
+  tar -czf $${SESSION_BUNDLE} -C $${LOAD_TESTS_HOME}/sessions $${SESSION_ID}
+
+  # Clean up dashboards, since included in the bundle
+  rm -rf $${SESSION_DASHBOARDS}
+
+  echo
+  echo "Log: $${SESSION_LOG}"
+  echo "Results: $${SESSION_RESULTS}"
+  echo "Bundle: $${SESSION_BUNDLE}"
+
+  if [ -n "$${OBJECT_STORAGE_REPOSITORY_PAR_URL}" ]; then
+
+    SESSION_BUNDLE_URL="$${OBJECT_STORAGE_REPOSITORY_PAR_URL}/bundles/$(basename $${SESSION_BUNDLE})"
+    wget -O/dev/null --quiet --method=PUT --body-file=$${SESSION_BUNDLE} $${SESSION_BUNDLE_URL}
+
+    if [ $? -eq 0 ]; then
+      echo
+      echo "Bundle uploaded to $${SESSION_BUNDLE_URL}"
+    else
+      echo "Cannot upload bundle to $${OBJECT_STORAGE_REPOSITORY_PAR_URL}"
+    fi
+  fi
+else
+  echo "Log: $${SESSION_LOG}"
+fi

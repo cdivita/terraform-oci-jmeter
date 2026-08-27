@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+download_url="$1"
+target_path="$2"
+target_dir=$(dirname "$target_path")
+
+mkdir -p "$target_dir"
+
+if [ ! -f "$target_path" ]; then
+  temporary_path="${target_path}.tmp.$$"
+  curl -fL --retry 3 -o "$temporary_path" "$download_url"
+  mv "$temporary_path" "$target_path"
+fi
+
+escaped_path=$(printf '%s' "$target_path" | sed 's/\\/\\\\/g; s/"/\\"/g')
+printf '{"path":"%s"}\n' "$escaped_path"
