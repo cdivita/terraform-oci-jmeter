@@ -171,17 +171,17 @@ variable "workers_count" {
   default     = 2
 }
 
-variable "jmeter_resources_url" {
+variable "jmeter_binaries_base_url" {
 
-  description = "The URL where to download JMeter resources"
+  description = "Base URL where to download Apache JMeter binaries"
   type        = string
 
   default = "https://downloads.apache.org/jmeter/binaries"
 }
 
-variable "upload_jmeter_resources_to_object_storage" {
+variable "jmeter_binaries_object_storage_upload_required" {
 
-  description = "Whether to download JMeter resources when needed, upload them to Object Storage, and create the bucket, object, and PAR resources"
+  description = "Whether to download JMeter binaries when needed, upload them to Object Storage, and create the bucket, object, and PAR resources"
   type        = bool
 
   default = false
@@ -203,17 +203,17 @@ variable "jmeter_resources_bucket_name" {
   default = "jmeter-resources"
 }
 
-variable "jmeter_resources_download_directory" {
+variable "jmeter_binaries_download_directory" {
 
-  description = "Local directory where Terraform downloads the configured JMeter resources archive"
+  description = "Local directory where Terraform downloads the configured JMeter binaries archive"
   type        = string
 
   default = null
 }
 
-variable "jmeter_resources_local_path" {
+variable "jmeter_binaries_local_path" {
 
-  description = "Local path of the downloaded JMeter resources archive to upload to Object Storage"
+  description = "Local path of the downloaded JMeter binaries archive to upload to Object Storage"
   type        = string
 
   default = null

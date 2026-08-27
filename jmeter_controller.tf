@@ -46,7 +46,7 @@ resource "oci_core_instance" "jmeter_controller" {
 
     user_data = base64gzip(templatefile("${path.module}/cloud-init/cloud-init-controller.yaml", {
       ssh-identity        = base64encode(tls_private_key.workers_key_pair.private_key_pem)
-      jmeter-binaries-url = local.effective_jmeter_resources_url
+      jmeter-binaries-url = local.jmeter_binaries_effective_url
       jmeter-version      = var.jmeter_version
       jmeter-sample-plan  = filebase64("${path.module}/cloud-init/jmeter/sample.jmx")
       jmeter-port         = var.jmeter_port

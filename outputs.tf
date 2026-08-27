@@ -10,8 +10,8 @@ output "jmeter" {
     }
 
     object_storage = {
-      jmeter_binaries_object_name  = var.upload_jmeter_resources_to_object_storage ? local.jmeter_binaries_object_name : null
-      jmeter_resources_bucket_name = var.upload_jmeter_resources_to_object_storage ? local.jmeter_resources_bucket_name : null
+      jmeter_binaries_object_name  = var.jmeter_binaries_object_storage_upload_required ? local.jmeter_binaries_object_name : null
+      jmeter_resources_bucket_name = var.jmeter_binaries_object_storage_upload_required ? local.jmeter_resources_bucket_name : null
       jmeter_resources_par_url     = local.jmeter_resources_par_url
     }
   }

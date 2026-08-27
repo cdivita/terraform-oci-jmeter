@@ -41,7 +41,7 @@ resource "oci_core_instance" "jmeter_workers" {
     ssh_authorized_keys = "${tls_private_key.controller_key_pair.public_key_openssh}${tls_private_key.workers_key_pair.public_key_openssh}"
 
     user_data = base64gzip(templatefile("${path.module}/cloud-init/cloud-init-workers.yaml", {
-      jmeter-binaries-url     = local.effective_jmeter_resources_url
+      jmeter-binaries-url     = local.jmeter_binaries_effective_url
       jmeter-version          = var.jmeter_version
       jmeter-port             = var.jmeter_port
       jmeter-jvm-heap-size    = local.jmeter_jvm_heap_size

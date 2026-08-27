@@ -64,96 +64,9 @@ oci_api_private_key_path = "~/.oci/oci_api_key.pem"
 
 ## OCI Policies
 
-The exact policies depend on whether the module creates network resources, reuses existing network resources, creates a bastion, and creates Object Storage resources.
+The required OCI IAM policies depend on the selected network mode, Bastion usage, Object Storage usage, and compartment layout.
 
-The examples below use placeholders:
-
-- `<group-name>`: IAM group running Terraform.
-- `<nodes-compartment>`: compartment containing the controller and worker instances.
-- `<network-compartment>`: compartment containing the VCN, subnet, gateways, and NSGs.
-- `<resources-compartment>`: compartment containing the Object Storage bucket.
-- `<bastion-compartment>`: compartment containing the OCI Bastion.
-
-When all resources are created in the same compartment, use the same compartment name in each statement.
-
-### Common Policies
-
-These are required in all scenarios because the module creates compute instances and reads image, shape, availability domain, region, and Object Storage namespace data.
-
-```text
-allow group <group-name> to manage instance-family in compartment <nodes-compartment>
-allow group <group-name> to use volume-family in compartment <nodes-compartment>
-allow group <group-name> to inspect compartments in tenancy
-allow group <group-name> to inspect tenancies in tenancy
-```
-
-If images are read from a different compartment, allow image read access there too:
-
-```text
-allow group <group-name> to read instance-images in compartment <image-compartment>
-```
-
-### Create New VCN And Subnet
-
-Required when `nodes_vcn_id = ""` and `nodes_subnet_id = ""`.
-
-```text
-allow group <group-name> to manage virtual-network-family in compartment <network-compartment>
-```
-
-This covers the VCN, subnet, NAT Gateway, Service Gateway, route table updates, NSGs, VNICs, and related network resources created by the module.
-
-### Reuse Existing VCN
-
-Required when `nodes_vcn_id` is provided and `nodes_subnet_id = ""`.
-
-```text
-allow group <group-name> to read virtual-network-family in compartment <network-compartment>
-allow group <group-name> to manage subnets in compartment <network-compartment>
-allow group <group-name> to manage network-security-groups in compartment <network-compartment>
-allow group <group-name> to use vnics in compartment <network-compartment>
-```
-
-The module reads the existing VCN and creates the JMeter subnet and NSGs.
-
-### Reuse Existing Subnet
-
-Required when `nodes_subnet_id` is provided.
-
-```text
-allow group <group-name> to read vcns in compartment <network-compartment>
-allow group <group-name> to read subnets in compartment <network-compartment>
-allow group <group-name> to manage network-security-groups in compartment <network-compartment>
-allow group <group-name> to use vnics in compartment <network-compartment>
-```
-
-The module reads the existing subnet and VCN, then creates NSGs and attaches them to controller and worker VNICs.
-
-### Create Bastion
-
-Required when `create_bastion = true`.
-
-```text
-allow group <group-name> to manage bastion-family in compartment <bastion-compartment>
-allow group <group-name> to read virtual-network-family in compartment <network-compartment>
-allow group <group-name> to read instance-family in compartment <nodes-compartment>
-allow group <group-name> to read instance-agent-plugins in compartment <nodes-compartment>
-allow group <group-name> to inspect work-requests in tenancy
-```
-
-If bastion sessions are created by users outside Terraform, those users also need permissions to use the bastion and manage bastion sessions, plus read access to the target network and instances.
-
-### Create Object Storage Resources
-
-Required when `upload_jmeter_resources_to_object_storage = true`.
-
-```text
-allow group <group-name> to manage object-family in compartment <resources-compartment>
-```
-
-This covers bucket creation, object upload, object reads/writes, listing, and pre-authenticated request management.
-
-If Object Storage resources are not created by this module and `jmeter_resources_par_url` is provided, Terraform does not need object management permissions for that bucket.
+- Read the policy reference at [docs/policies/](docs/policies/).
 
 ## Network Modes
 
@@ -226,7 +139,7 @@ The bastion targets the JMeter subnet and uses `bastion_allowed_cidr_blocks` for
 Set the following variable to let the module manage JMeter resources in Object Storage:
 
 ```hcl
-upload_jmeter_resources_to_object_storage = true
+jmeter_binaries_object_storage_upload_required = true
 ```
 
 When enabled, the module:
@@ -245,10 +158,10 @@ binaries/apache-jmeter-<jmeter_version>.tgz
 This fixed layout is important because cloud-init downloads:
 
 ```text
-<effective_jmeter_resources_url>/apache-jmeter-<jmeter_version>.tgz
+<jmeter_binaries_effective_url>/apache-jmeter-<jmeter_version>.tgz
 ```
 
-When the module creates Object Storage resources, `effective_jmeter_resources_url` resolves to:
+When the module creates Object Storage resources, `jmeter_binaries_effective_url` resolves to:
 
 ```text
 <jmeter_resources_par_url>/binaries
@@ -273,7 +186,7 @@ This allows:
 
 The PAR URL is taken from the OCI provider-computed `full_path` and normalized by removing the trailing slash.
 
-If `upload_jmeter_resources_to_object_storage = false`, the local PAR URL falls back to the user-provided `jmeter_resources_par_url`.
+If `jmeter_binaries_object_storage_upload_required = false`, the local PAR URL falls back to the user-provided `jmeter_resources_par_url`.
 
 ## Test Package Layout
 
@@ -386,7 +299,7 @@ nodes_memory  = 32
 
 create_bastion = true
 
-upload_jmeter_resources_to_object_storage = true
+jmeter_binaries_object_storage_upload_required = true
 jmeter_resources_bucket_name              = "jmeter-resources"
 ```
 
@@ -400,18 +313,18 @@ oci_config_file_profile = "DEFAULT"
 nodes_compartment_id = "ocid1.compartment..."
 nodes_subnet_id      = "ocid1.subnet..."
 
-upload_jmeter_resources_to_object_storage = true
+jmeter_binaries_object_storage_upload_required = true
 ```
 
 Use an existing Object Storage PAR instead of creating Object Storage resources:
 
 ```hcl
-upload_jmeter_resources_to_object_storage = false
+jmeter_binaries_object_storage_upload_required = false
 jmeter_resources_par_url                  = "https://objectstorage..."
-jmeter_resources_url                      = "https://downloads.apache.org/jmeter/binaries"
+jmeter_binaries_base_url                  = "https://downloads.apache.org/jmeter/binaries"
 ```
 
-In this mode, nodes download JMeter binaries directly from `jmeter_resources_url`.
+In this mode, nodes download JMeter binaries directly from `jmeter_binaries_base_url`.
 
 ## Inputs
 
@@ -445,12 +358,12 @@ In this mode, nodes download JMeter binaries directly from `jmeter_resources_url
 | `jmeter_version` | `string` | `"5.6.3"` | Apache JMeter version to install. |
 | `jmeter_port` | `number` | `1099` | JMeter worker RMI port. |
 | `jmeter_client_port` | `number` | `4000` | Controller callback RMI base port. Opens this port through `+2`. |
-| `jmeter_resources_url` | `string` | Apache JMeter binaries URL | Base URL used to download JMeter binaries when Object Storage upload is disabled or for local pre-upload download. |
-| `upload_jmeter_resources_to_object_storage` | `bool` | `false` | Create Object Storage resources and upload JMeter binaries. |
+| `jmeter_binaries_base_url` | `string` | Apache JMeter binaries URL | Base URL used to download JMeter binaries when Object Storage upload is disabled or for local pre-upload download. |
+| `jmeter_binaries_object_storage_upload_required` | `bool` | `false` | Create Object Storage resources and upload JMeter binaries. |
 | `jmeter_resources_bucket_compartment_id` | `string` | `null` | Compartment for the JMeter resources bucket. Falls back to `nodes_compartment_id`. |
 | `jmeter_resources_bucket_name` | `string` | `"jmeter-resources"` | Object Storage bucket name. |
-| `jmeter_resources_download_directory` | `string` | `null` | Local download directory. Defaults to `.downloads` under the module. |
-| `jmeter_resources_local_path` | `string` | `null` | Existing local JMeter archive to upload instead of downloading. |
+| `jmeter_binaries_download_directory` | `string` | `null` | Local download directory. Defaults to `.downloads` under the module. |
+| `jmeter_binaries_local_path` | `string` | `null` | Existing local JMeter archive to upload instead of downloading. |
 | `jmeter_resources_object_content_type` | `string` | `"application/gzip"` | Content type for the uploaded JMeter archive. |
 | `jmeter_resources_par_name` | `string` | `"jmeter-resources-par"` | Name for the generated PAR. |
 | `jmeter_resources_par_access_type` | `string` | `"AnyObjectReadWrite"` | Access type for the generated PAR. |
@@ -520,7 +433,7 @@ If the generated PAR changes, run `terraform apply` or `terraform apply -refresh
 - Adding or changing immutable PAR fields such as `access_type`, `bucket_listing_action`, or `time_expires` can force PAR replacement.
 - Replacing a PAR creates a new URL token. Any instance metadata or external tooling that uses the old URL must be refreshed or updated.
 - The generated PAR includes `bucket_listing_action = "ListObjects"`. A lifecycle rule ignores changes to that field to avoid repeated drift if the provider/API does not read it back consistently.
-- If `upload_jmeter_resources_to_object_storage` is enabled and `jmeter_resources_local_path` is unset, Terraform downloads the Apache JMeter archive locally before uploading it.
+- If `jmeter_binaries_object_storage_upload_required` is enabled and `jmeter_binaries_local_path` is unset, Terraform downloads the Apache JMeter archive locally before uploading it.
 - The generated bucket uses `NoPublicAccess`.
 - The JMeter archive object is uploaded with the `InfrequentAccess` storage tier.
 - Controller and worker instances are private. Use OCI Bastion or another private access path to connect.

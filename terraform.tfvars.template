@@ -19,14 +19,14 @@ nodes_compartment_id = ""
 #bastion_compartment_id = null
 
 # Download/upload JMeter binaries to Object Storage and create bucket, object, and PAR
-#upload_jmeter_resources_to_object_storage = true
+#jmeter_binaries_object_storage_upload_required = true
 #jmeter_resources_bucket_name = "jmeter-binaries"
 
 # Optional: use an already downloaded local archive instead of downloading it
-#jmeter_resources_local_path = "./apache-jmeter-5.6.3.tgz"
+#jmeter_binaries_local_path = "./apache-jmeter-5.6.3.tgz"
 
 # Optional: choose where Terraform downloads the archive when no local path is set
-#jmeter_resources_download_directory = "./.downloads"
+#jmeter_binaries_download_directory = "./.downloads"
 
 # Optional: configure the generated PAR
 #jmeter_resources_par_time_expires = "2099-12-31T23:59:59Z"
